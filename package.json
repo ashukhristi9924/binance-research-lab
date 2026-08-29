@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "prisma generate && prisma db push && next build",
-    "start": "NODE_ENV=production tsx src/server.ts",
+    "start": "cross-env NODE_ENV=production tsx src/server.ts",
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
@@ -15,12 +15,14 @@
   "dependencies": {
     "@prisma/client": "^5.21.1",
     "clsx": "^2.1.1",
+    "cross-env": "^7.0.3",
     "lucide-react": "^0.453.0",
     "next": "^14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.13.0",
     "tailwind-merge": "^2.5.4",
+    "tsx": "^4.19.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -32,7 +34,6 @@
     "postcss": "^8.4.47",
     "prisma": "^5.21.1",
     "tailwindcss": "^3.4.14",
-    "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
 }

@@ -4,8 +4,8 @@ import { WebSocketServer } from 'ws';
 import { engineManager } from './engine/manager';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = dev ? 'localhost' : '0.0.0.0';
-const port = parseInt(process.env.PORT || '3000', 10);
+const hostname = '0.0.0.0';
+const port = Number(process.env.PORT) || 3000;
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -33,6 +33,7 @@ async function main() {
 
   server.listen(port, hostname, async () => {
     console.log(`> Binance Research Laboratory running on http://${hostname}:${port}`);
+    console.log(`> Server listening on host 0.0.0.0 port ${port} (process.env.PORT: ${process.env.PORT || '3000'})`);
     console.log(`> WebSocket Broadcaster attached on port ${port}`);
 
     // Initialize market graph, Binance WS connection, and strategy engines
