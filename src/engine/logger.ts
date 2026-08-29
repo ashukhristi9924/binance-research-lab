@@ -12,7 +12,7 @@ export class ResearchLogger {
 
   public async log(
     level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG',
-    source: 'WS' | 'ENGINE' | 'PAPER_TRADER' | 'SYSTEM',
+    source: 'WS' | 'ENGINE' | 'PAPER_TRADER' | 'SYSTEM' | string,
     message: string,
     metadata?: any
   ) {

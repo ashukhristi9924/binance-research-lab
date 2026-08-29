@@ -14,10 +14,10 @@ export const TheoreticalVsRealisticView: React.FC<TheoreticalVsRealisticViewProp
   let totalSlippageDeducted = 0;
 
   for (const opp of opportunities) {
-    totalTheoreticalProfit += Math.max(0, opp.grossProfitUsd);
-    totalRealisticProfit += opp.netProfitUsd;
-    totalFeesDeducted += opp.totalFeesUsd;
-    totalSlippageDeducted += opp.totalSlippageUsd;
+    totalTheoreticalProfit += Math.max(0, opp.theoreticalProfitUsd ?? (opp as any).grossProfitUsd ?? 0);
+    totalRealisticProfit += opp.realisticProfitUsd ?? (opp as any).netProfitUsd ?? 0;
+    totalFeesDeducted += opp.totalFeesUsd ?? 0;
+    totalSlippageDeducted += opp.totalSlippageUsd ?? 0;
   }
 
   const gap = totalTheoreticalProfit - totalRealisticProfit;

@@ -396,7 +396,7 @@ export interface ScalperBaselineRecord {
 }
 
 export interface StrategyMetricsSummary {
-  strategyId: 'triangular' | 'microstructure' | 'market_making' | 'scalper';
+  strategyId: 'triangular' | 'microstructure' | 'market_making' | 'scalper' | 'btc_lead_lag';
   strategyName: string;
   virtualBalanceUsd: number;
   initialCapitalUsd: number;
@@ -417,7 +417,7 @@ export interface StrategyMetricsSummary {
 export interface ResearchExperimentRecord {
   id: string;
   name: string;
-  strategyType: 'triangular' | 'microstructure' | 'market_making' | 'scalper';
+  strategyType: 'triangular' | 'microstructure' | 'market_making' | 'scalper' | 'btc_lead_lag';
   version: string;
   symbol: string;
   parametersJson: string;
@@ -589,3 +589,14 @@ export interface BtcLeadLagEventRecord {
   tPlus5s?: number;
   tPlus10s?: number;
 }
+
+export interface SystemStatusState {
+  binanceWsConnected?: boolean;
+  demoMode?: boolean;
+  marketDataAgeMs?: number;
+  discoveredCyclesCount?: number;
+  activePairsCount?: number;
+  uptimeSeconds?: number;
+  [key: string]: any;
+}
+
