@@ -5,11 +5,13 @@ import { OrderBookCache } from './orderBookCache';
 
 export interface MarketDataStatusReport {
   connected: boolean;
+  binanceWsConnected?: boolean;
   mode: 'live' | 'demo';
   source: string;
   symbols: number;
   lastUpdate: string | null;
   dataAgeMs: number;
+  marketDataAgeMs?: number;
   statusText: 'CONNECTED' | 'CONNECTING' | 'DISCONNECTED' | 'RECONNECTING' | 'DELAYED' | 'STALE';
   error: string | null;
   reconnectAttempts: number;
@@ -237,11 +239,13 @@ export class BinanceWsClient {
 
     return {
       connected: this.isConnected || isDemoMode,
+      binanceWsConnected: this.isConnected || isDemoMode,
       mode: isDemoMode ? 'demo' : 'live',
       source: isDemoMode ? 'simulated-demo-generator' : 'binance-public-websocket',
       symbols: this.activeSymbols.length,
       lastUpdate: this.lastMessageTimestamp > 0 ? new Date(this.lastMessageTimestamp).toISOString() : null,
       dataAgeMs: dataAgeMs < 999999 ? dataAgeMs : 0,
+      marketDataAgeMs: dataAgeMs < 999999 ? dataAgeMs : 0,
       statusText,
       error: this.lastError,
       reconnectAttempts: this.reconnectAttempts,

@@ -20,60 +20,14 @@ import { PaperTradingView } from '../components/views/PaperTradingView';
 import { AnalyticsView } from '../components/views/AnalyticsView';
 import { ResearchLogsView } from '../components/views/ResearchLogsView';
 import { SettingsView } from '../components/views/SettingsView';
-import { ArbitrageOpportunityCalc, PaperTradeRecord, PriceBookTicker } from '../lib/types';
+import { useDashboardSocket } from '../hooks/useDashboardSocket';
+import { ArbitrageOpportunityCalc } from '../lib/types';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('btc-lead-lag');
-  const [opportunities, setOpportunities] = useState<ArbitrageOpportunityCalc[]>([]);
-  const [paperTrades, setPaperTrades] = useState<PaperTradeRecord[]>([]);
-  const [tickers, setTickers] = useState<PriceBookTicker[]>([]);
   const [selectedOpp, setSelectedOpp] = useState<ArbitrageOpportunityCalc | null>(null);
-  const [account, setAccount] = useState<any>(null);
-  const [status, setStatus] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [oppRes, tradeRes, statusRes, accountRes] = await Promise.all([
-          fetch('/api/opportunities?limit=50'),
-          fetch('/api/trades?limit=50'),
-          fetch('/api/market-data/status'),
-          fetch('/api/paper-account'),
-        ]);
-
-        if (oppRes.ok) {
-          const json = await oppRes.json();
-          setOpportunities(Array.isArray(json) ? json : []);
-        }
-        if (tradeRes.ok) {
-          const json = await tradeRes.json();
-          setPaperTrades(Array.isArray(json) ? json : []);
-        }
-        if (statusRes.ok) {
-          const s = await statusRes.json();
-          setStatus(s);
-          if (s.symbolUpdates) {
-            const list: PriceBookTicker[] = Object.entries(s.symbolUpdates).map(([symbol, val]: [string, any]) => ({
-              symbol,
-              bidPrice: val.bid,
-              bidQty: 10,
-              askPrice: val.ask,
-              askQty: 10,
-              updatedAt: Date.now(),
-            }));
-            setTickers(list);
-          }
-        }
-        if (accountRes.ok) setAccount(await accountRes.json());
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const { status, opportunities, paperTrades, tickers, account, refreshData } = useDashboardSocket();
 
   return (
     <div className="flex h-screen bg-panel-50 text-gray-100 overflow-hidden font-mono text-xs">
