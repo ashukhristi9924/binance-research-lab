@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model StrategySettings {
+  id                         String   @id @default("default")
+  startingCapital            Float    @default(10000.0)
+  minNetProfitPct            Float    @default(0.05)
+  minNetProfitUsd            Float    @default(0.50)
+  maxTradeSize               Float    @default(5000.0)
+  makerFeePct                Float    @default(0.075)
+  takerFeePct                Float    @default(0.10)
+  maxAllowedSlippagePct      Float    @default(0.20)
+  minLiquidityUsd            Float    @default(100.0)
+  simulatedLatencyMs         Int      @default(50)
+  enablePaperTrading         Boolean  @default(true)
+  enableOpportunityDetection  Boolean  @default(true)
+  enableMicrostructureEngine Boolean  @default(true)
+  enableMarketMakingEngine   Boolean  @default(true)
+  enableScalperEngine        Boolean  @default(true)
+  scalperUniverseSize        Int      @default(50)
+  scalperMaxPositions        Int      @default(5)
+  scalperPosSizePct          Float    @default(10.0)
+  enableBtcLeadLagEngine     Boolean  @default(true)
+  btcLeadLagUniverseSize     Int      @default(50)
+  btcLeadLagMaxPositions     Int      @default(5)
+  btcLeadLagPosSizePct       Float    @default(10.0)
+  btcLeadLagExecutionMode    String   @default("SPOT_LONG_FUTURES_SHORT")
+  demoMode                   Boolean  @default(false)
+  retentionDays              Int      @default(30)
+  updatedAt                  DateTime @updatedAt
+}
+
+model PaperAccount {
+  id                 String   @id @default("default")
+  virtualBalanceUsd  Float    @default(10000.0)
+  initialCapitalUsd  Float    @default(10000.0)
+  totalTrades        Int      @default(0)
+  winningTrades      Int      @default(0)
+  losingTrades       Int      @default(0)
+  grossPnlUsd        Float    @default(0.0)
+  totalFeesUsd       Float    @default(0.0)
+  totalSlippageUsd   Float    @default(0.0)
+  netPnlUsd          Float    @default(0.0)
+  winRatePct         Float    @default(0.0)
+  updatedAt          DateTime @updatedAt
+}
+
+model StrategyAccount {
+  id                 String   @id // "triangular", "microstructure", "market_making", "scalper"
+  strategyName       String
+  virtualBalanceUsd  Float    @default(10000.0)
+  initialCapitalUsd  Float    @default(10000.0)
+  totalTrades        Int      @default(0)
+  winningTrades      Int      @default(0)
+  losingTrades       Int      @default(0)
+  grossPnlUsd        Float    @default(0.0)
+  totalFeesUsd       Float    @default(0.0)
+  totalSlippageUsd   Float    @default(0.0)
+  netPnlUsd          Float    @default(0.0)
+  winRatePct         Float    @default(0.0)
+  maxDrawdownPct     Float    @default(0.0)
+  updatedAt          DateTime @updatedAt
+}
+
+model ArbitrageOpportunity {
+  id                   String      @id @default(uuid())
+  timestamp            DateTime    @default(now())
+  cyclePath            String
+  leg1Pair             String
+  leg2Pair             String
+  leg3Pair             String
+  startingCapitalUsd   Float
+  theoreticalFinalUsd  Float
+  grossProfitUsd       Float
+  totalFeesUsd         Float
+  totalSlippageUsd     Float
+  netProfitUsd         Float
+  netProfitPct         Float
+  liquidityUsd         Float
+  durationMs           Int
+  status               String
+  classification       String
+  paperTrade           PaperTrade?
+  createdAt            DateTime    @default(now())
+}
+
+model PaperTrade {
+  id                   String               @id @default(uuid())
+  opportunityId       String?              @unique
+  opportunity          ArbitrageOpportunity? @relation(fields: [opportunityId], references: [id])
+  timestamp            DateTime             @default(now())
+  cyclePath            String
+  startingCapitalUsd   Float
+  finalBalanceUsd      Float
+  grossProfitUsd       Float
+  totalFeesUsd         Float
+  totalSlippageUsd     Float
+  netProfitUsd         Float
+  netProfitPct         Float
+  status               String
+  executionDurationMs  Int
+  legs                 PaperTradeLeg[]
+  createdAt            DateTime             @default(now())
+}
+
+model PaperTradeLeg {
+  id            String     @id @default(uuid())
+  paperTradeId  String
+  paperTrade    PaperTrade @relation(fields: [paperTradeId], references: [id], onDelete: Cascade)
+  legIndex      Int
+  symbol        String
+  side          String
+  topBookPrice  Float
+  vwapPrice     Float
+  quantity      Float
+  quoteQuantity Float
+  feeUsd        Float
+  slippageUsd   Float
+  createdAt     DateTime   @default(now())
+}
+
+model MicrostructureTrade {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  symbol           String
+  direction        String   // "LONG" or "SHORT"
+  entryPrice       Float
+  exitPrice        Float
+  quantity         Float
+  signalScore      Float
+  holdingTimeMs    Int
+  grossPnlUsd      Float
+  feeUsd           Float
+  slippageUsd      Float
+  netPnlUsd        Float
+  netPnlPct        Float
+  exitReason       String   
+  imbalanceRatio   Float
+  tradeFlowRatio   Float
+  momentum1s       Float
+  createdAt        DateTime @default(now())
+}
+
+model MicrostructureFeatureSnapshot {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  symbol           String
+  midPrice         Float
+  spreadUsd        Float
+  spreadPct        Float
+  imbalanceTop5    Float
+  imbalanceTop10   Float
+  imbalanceTop20   Float
+  depthImbalance01 Float
+  tradeFlowRatio   Float
+  tradesPerSec     Float
+  volumePerSec     Float
+  momentum1s       Float
+  momentum3s       Float
+  momentum5s       Float
+  volatility       Float
+  signalScore      Float
+  createdAt        DateTime @default(now())
+}
+
+model MarketMakingQuote {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  symbol           String
+  simulatedBid     Float
+  simulatedAsk     Float
+  midPrice         Float
+  spreadPerUnitUsd Float    @default(0.0)
+  totalSpreadUsd   Float    @default(0.0)
+  orderSizeBase    Float
+  queueAhead       Float    @default(0.0)
+  queueConsumed    Float    @default(0.0)
+  status           String   
+  createdAt        DateTime @default(now())
+}
+
+model MarketMakingFill {
+  id                    String   @id @default(uuid())
+  timestamp             DateTime @default(now())
+  orderPlacementTime    DateTime @default(now())
+  symbol                String
+  side                  String   
+  fillPrice             Float
+  quantity              Float
+  notionalUsd           Float    @default(0.0)
+  spreadPerUnitUsd      Float    @default(0.0)
+  totalSpreadUsd        Float    @default(0.0)
+  feeType               String   @default("MAKER")
+  feeRatePct            Float    @default(0.075)
+  feeUsd                Float
+  slippageUsd           Float    @default(0.0)
+  adverseSelection100ms Float    @default(0.0)
+  adverseSelection1s    Float    @default(0.0)
+  adverseSelection3s    Float    @default(0.0)
+  adverseSelection5s    Float    @default(0.0)
+  grossPnlUsd           Float    @default(0.0)
+  totalCostsUsd         Float    @default(0.0)
+  realizedPnlUsd        Float
+  bestBidPlacement      Float    @default(0.0)
+  bestAskPlacement      Float    @default(0.0)
+  midPlacement          Float    @default(0.0)
+  simBidPlacement       Float    @default(0.0)
+  simAskPlacement       Float    @default(0.0)
+  bestBidFill           Float    @default(0.0)
+  bestAskFill           Float    @default(0.0)
+  midFill               Float    @default(0.0)
+  simBidFill            Float    @default(0.0)
+  simAskFill            Float    @default(0.0)
+  startingBtc           Float    @default(0.0)
+  endingBtc             Float    @default(0.0)
+  startingUsdt          Float    @default(10000.0)
+  endingUsdt            Float    @default(10000.0)
+  queueAhead            Float    @default(0.0)
+  queueConsumed         Float    @default(0.0)
+  fillStatus            String   @default("VALID")
+  invalidationReason    String?  
+  createdAt             DateTime @default(now())
+}
+
+model MarketMakingInventory {
+  id                String   @id @default("default")
+  mode              String   @default("CASH_ONLY")
+  symbol            String   @default("BTCUSDT")
+  baseInventoryQty  Float    @default(0.0)
+  quoteBalanceUsd   Float    @default(10000.0)
+  startingBtcQty    Float    @default(0.0)
+  startingQuoteUsd  Float    @default(10000.0)
+  totalPortfolioUsd Float    @default(10000.0)
+  inventorySkew     Float    @default(0.0)
+  avgCostBasisUsd   Float    @default(0.0)
+  realizedPnlUsd    Float    @default(0.0)
+  unrealizedPnlUsd  Float    @default(0.0)
+  updatedAt         DateTime @updatedAt
+}
+
+model ScalperTrade {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  symbol           String
+  entryPrice       Float
+  exitPrice        Float
+  quantity         Float
+  holdingTimeMs    Int
+  grossPnlUsd      Float
+  feeUsd           Float
+  slippageUsd      Float
+  netPnlUsd        Float
+  netPnlPct        Float
+  scalperScore     Float
+  volatilityRegime String   // "VERY_LOW", "LOW", "MEDIUM", "HIGH", "VERY_HIGH"
+  exitReason       String   // "TAKE_PROFIT", "STOP_LOSS", "MAX_HOLDING", "SIGNAL_REVERSAL", "RISK_LIMIT"
+  createdAt        DateTime @default(now())
+}
+
+model MarketUniverseSnapshot {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  rank             Int
+  symbol           String
+  volume24hUsd     Float
+  spreadPct        Float
+  orderBookDepth   Float
+  tradeFrequency   Float
+  volatility       Float
+  liquidityScore   Float
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+}
+
+model ScalperSignal {
+  id                    String   @id @default(uuid())
+  timestamp             DateTime @default(now())
+  symbol                String
+  expectedGrossMovement Float
+  estimatedCostsUsd     Float
+  expectedNetProfitUsd  Float
+  expectedNetProfitPct  Float
+  scalperScore          Float
+  volatilityRegime      String
+  status                String   // "QUALIFIED", "REJECTED"
+  rejectionReason       String?  // "EXPECTED_NET_PROFIT_TOO_LOW", "SPREAD_TOO_HIGH", "MAX_POSITIONS_REACHED", etc.
+  createdAt             DateTime @default(now())
+}
+
+model ScalperBaselineTrade {
+  id            String   @id @default(uuid())
+  timestamp     DateTime @default(now())
+  baselineType  String   // "FIXED_GRID", "RANDOM_ENTRY"
+  symbol        String
+  entryPrice    Float
+  exitPrice     Float
+  quantity      Float
+  grossPnlUsd   Float
+  feeUsd        Float
+  slippageUsd   Float
+  netPnlUsd     Float
+  netPnlPct     Float
+  createdAt     DateTime @default(now())
+}
+
+model ResearchExperiment {
+  id                String   @id @default(uuid())
+  name              String
+  strategyType      String   // "triangular", "microstructure", "market_making", "scalper"
+  version           String   // "v1.0", "v1.1"
+  symbol            String
+  parametersJson    String
+  startingCapital   Float
+  totalTrades       Int
+  winRatePct        Float
+  netPnlUsd         Float
+  roiPct            Float
+  maxDrawdownPct    Float
+  notes             String?
+  createdAt         DateTime @default(now())
+}
+
+model ResearchLog {
+  id           String   @id @default(uuid())
+  timestamp    DateTime @default(now())
+  level        String
+  source       String   // "WS", "ENGINE", "PAPER_TRADER", "MICROSTRUCTURE", "MARKET_MAKING", "SCALPER", "SYSTEM"
+  message      String
+  metadataJson String?
+  createdAt    DateTime @default(now())
+}
+
+model PerformanceMetric {
+  id                     String   @id @default(uuid())
+  timestamp              DateTime @default(now())
+  strategyType           String   @default("triangular")
+  virtualBalanceUsd      Float
+  netPnlUsd              Float
+  totalOpportunities     Int
+  paperTradesExecuted    Int
+  winRatePct             Float
+  avgProfitPerTradeUsd   Float
+}
+
+model BtcLeadLagEvent {
+  id               String   @id @default(uuid())
+  eventId          String   @unique
+  timestamp        DateTime @default(now())
+  btcReturn100ms   Float
+  btcReturn1s      Float
+  btcReturn5s      Float
+  btcVolatility    Float
+  btcVolume        Float
+  btcShockScore    Float
+  marketRegime     String
+  followerSymbol   String
+  followerReturn   Float
+  followerBeta     Float
+  expectedReturn   Float
+  residual         Float
+  tPlus100ms       Float?
+  tPlus250ms       Float?
+  tPlus500ms       Float?
+  tPlus1s          Float?
+  tPlus2s          Float?
+  tPlus3s          Float?
+  tPlus5s          Float?
+  tPlus10s         Float?
+  createdAt        DateTime @default(now())
+}
+
+model BtcLeadLagTrade {
+  id                   String   @id @default(uuid())
+  symbol               String
+  direction            String   // "LONG", "SHORT"
+  modelType            String   // "LEAD_LAG_MOMENTUM", "RELATIVE_VALUE_MEAN_REVERSION"
+  executionMode        String   // "SPOT_LONG", "FUTURES_SHORT"
+  entryPrice           Float
+  exitPrice            Float
+  quantity             Float
+  positionNotionalUsd  Float
+  expectedGrossUsd     Float
+  totalCostsUsd        Float
+  expectedNetProfitUsd Float
+  signalScore          Float
+  btcShockScore        Float
+  followerBeta         Float
+  expectedReturnPct    Float
+  actualReturnPct      Float
+  residualPct          Float
+  grossPnlUsd          Float
+  feeUsd               Float
+  slippageUsd          Float
+  netPnlUsd            Float
+  netPnlPct            Float
+  exitReason           String
+  createdAt            DateTime @default(now())
+}
