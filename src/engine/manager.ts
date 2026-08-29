@@ -181,14 +181,21 @@ export class EngineManager {
     );
   }
 
+  private isInitialized: boolean = false;
+
   public static getInstance(): EngineManager {
     if (!globalForEngine.engineManager) {
-      globalForEngine.engineManager = new EngineManager();
+      const instance = new EngineManager();
+      globalForEngine.engineManager = instance;
+      instance.initialize();
     }
     return globalForEngine.engineManager;
   }
 
   public async initialize() {
+    if (this.isInitialized) return;
+    this.isInitialized = true;
+
     await ensureDefaultRecords();
     await this.ensureStrategyAccounts();
     await this.loadSettingsFromDb();

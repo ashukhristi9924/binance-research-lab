@@ -9,9 +9,9 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ status, onRefresh }) => {
   const dataAge = typeof status.dataAgeMs === 'number' ? status.dataAgeMs : 99999;
   const isDemo = status.mode === 'demo';
-  const isConnected = status.connected === true;
-  const isLive = isConnected && dataAge < 5000;
-  const isStale = isConnected && dataAge >= 5000;
+  const isConnected = status.connected === true || status.binanceWsConnected === true;
+  const isLive = (status.connected === true || isConnected) && dataAge < 5000;
+  const isStale = isConnected && dataAge >= 5000 && dataAge < 15000;
 
   let badgeColor = 'bg-rose-950/40 border-rose-500/30 text-rose-400';
   let badgeText = 'DISCONNECTED';

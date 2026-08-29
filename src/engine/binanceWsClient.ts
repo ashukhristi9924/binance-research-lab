@@ -16,6 +16,9 @@ export interface MarketDataStatusReport {
   error: string | null;
   reconnectAttempts: number;
   messagesReceived: number;
+  tickerUpdates: number;
+  lastCloseCode: number | null;
+  lastCloseReason: string | null;
   streamUrl: string;
   symbolUpdates: Record<string, { lastTime: string; ageMs: number; bid: number; ask: number }>;
   marketDataReady: boolean;
@@ -31,7 +34,10 @@ export class BinanceWsClient {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private lastMessageTimestamp: number = 0;
   private messagesReceivedCount: number = 0;
+  private parsedTickerUpdatesCount: number = 0;
   private lastError: string | null = null;
+  private lastCloseCode: number | null = null;
+  private lastCloseReason: string | null = null;
 
   // Primary focus streams
   private defaultSymbols = ['BTCUSDT', 'ETHUSDT', 'ETHBTC'];
@@ -52,7 +58,7 @@ export class BinanceWsClient {
 
   private getStreamUrl(): string {
     const streamNames = this.activeSymbols.map((s) => `${s.toLowerCase()}@bookTicker`).join('/');
-    return `wss://stream.binance.com:9443/stream?streams=${streamNames}`;
+    return `wss://stream.binance.com/stream?streams=${streamNames}`;
   }
 
   public connect() {
@@ -73,11 +79,10 @@ export class BinanceWsClient {
         this.isConnecting = false;
         this.isReconnecting = false;
         this.reconnectAttempts = 0;
-        this.lastMessageTimestamp = Date.now();
         this.onStatusChange('CONNECTED');
 
         logger.log('INFO', 'WS', `BINANCE WS CONNECTED: ${url}`);
-        logger.log('INFO', 'WS', `BINANCE WS SUBSCRIBED: ${this.activeSymbols.map((s) => `${s}@bookTicker`).join(', ')}`);
+        logger.log('INFO', 'WS', `BINANCE WS SUBSCRIBED: ${this.activeSymbols.length} streams`);
 
         this.startHeartbeat();
       });
@@ -103,6 +108,7 @@ export class BinanceWsClient {
 
             // Sanity check valid data
             if (bid > 0 && ask > 0 && bid <= ask && bidQty > 0 && askQty > 0) {
+              this.parsedTickerUpdatesCount++;
               const ticker: PriceBookTicker = {
                 symbol: payload.s,
                 bidPrice: bid,
@@ -130,12 +136,14 @@ export class BinanceWsClient {
 
       this.ws.on('close', (code: number, reason: Buffer) => {
         const reasonStr = reason.toString() || `Close code ${code}`;
+        this.lastCloseCode = code;
+        this.lastCloseReason = reasonStr;
         this.isConnected = false;
         this.isConnecting = false;
         this.stopHeartbeat();
         this.onStatusChange('DISCONNECTED');
 
-        logger.log('WARN', 'WS', `BINANCE WS DISCONNECTED: ${reasonStr}`);
+        logger.log('WARN', 'WS', `BINANCE WS DISCONNECTED (Code ${code}): ${reasonStr}`);
         this.scheduleReconnect();
       });
     } catch (e: any) {
@@ -207,20 +215,24 @@ export class BinanceWsClient {
 
   public getStatusReport(isDemoMode: boolean): MarketDataStatusReport {
     const now = Date.now();
-    const dataAgeMs = this.lastMessageTimestamp > 0 ? now - this.lastMessageTimestamp : 999999;
+    const hasReceivedMessages = this.lastMessageTimestamp > 0;
+    const dataAgeMs = hasReceivedMessages ? now - this.lastMessageTimestamp : 999999;
 
     let statusText: MarketDataStatusReport['statusText'] = 'DISCONNECTED';
+    let isDataLive = false;
 
     if (isDemoMode) {
       statusText = 'CONNECTED';
+      isDataLive = true;
     } else if (this.isConnecting) {
       statusText = 'CONNECTING';
     } else if (this.isReconnecting) {
       statusText = 'RECONNECTING';
     } else if (this.isConnected) {
-      if (dataAgeMs < 2000) {
+      if (hasReceivedMessages && dataAgeMs < 5000) {
         statusText = 'CONNECTED';
-      } else if (dataAgeMs < 5000) {
+        isDataLive = true;
+      } else if (hasReceivedMessages && dataAgeMs < 15000) {
         statusText = 'DELAYED';
       } else {
         statusText = 'STALE';
@@ -238,18 +250,21 @@ export class BinanceWsClient {
     }
 
     return {
-      connected: this.isConnected || isDemoMode,
+      connected: isDataLive || isDemoMode,
       binanceWsConnected: this.isConnected || isDemoMode,
       mode: isDemoMode ? 'demo' : 'live',
       source: isDemoMode ? 'simulated-demo-generator' : 'binance-public-websocket',
       symbols: this.activeSymbols.length,
-      lastUpdate: this.lastMessageTimestamp > 0 ? new Date(this.lastMessageTimestamp).toISOString() : null,
-      dataAgeMs: dataAgeMs < 999999 ? dataAgeMs : 0,
-      marketDataAgeMs: dataAgeMs < 999999 ? dataAgeMs : 0,
+      lastUpdate: hasReceivedMessages ? new Date(this.lastMessageTimestamp).toISOString() : null,
+      dataAgeMs: hasReceivedMessages ? dataAgeMs : 999999,
+      marketDataAgeMs: hasReceivedMessages ? dataAgeMs : 999999,
       statusText,
       error: this.lastError,
       reconnectAttempts: this.reconnectAttempts,
       messagesReceived: this.messagesReceivedCount,
+      tickerUpdates: this.parsedTickerUpdatesCount,
+      lastCloseCode: this.lastCloseCode,
+      lastCloseReason: this.lastCloseReason,
       streamUrl: this.getStreamUrl(),
       symbolUpdates: symbolUpdatesRecord,
       marketDataReady: this.isMarketDataReady() || isDemoMode,
