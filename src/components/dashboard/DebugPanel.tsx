@@ -29,7 +29,7 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({ status, opportunitiesCou
           <div className="p-2.5 bg-panel-200/50 rounded border border-panel-300">
             <span className="text-gray-400 block text-[10px]">CONNECTION STATE</span>
             <span className={`font-bold text-sm ${status.connected ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {status.mode === 'live' ? (status.connected ? 'LIVE BINANCE WS' : 'FAILED') : 'DEMO MODE'}
+              {status.mode === 'live' ? (status.connected ? 'LIVE BINANCE STREAM' : 'DISCONNECTED') : 'DEMO MODE'}
             </span>
           </div>
 

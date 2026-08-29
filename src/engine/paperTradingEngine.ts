@@ -5,6 +5,7 @@ import { logger } from './logger';
 
 export class PaperTradingEngine {
   private active: boolean = true;
+  private recentTrades: PaperTradeRecord[] = [];
 
   public setEnabled(enabled: boolean) {
     this.active = enabled;
@@ -12,6 +13,10 @@ export class PaperTradingEngine {
 
   public isEnabled(): boolean {
     return this.active;
+  }
+
+  public getRecentTrades(): PaperTradeRecord[] {
+    return this.recentTrades;
   }
 
   /**
@@ -71,6 +76,9 @@ export class PaperTradingEngine {
       executionDurationMs: executionDuration,
       legs: opp.legs,
     };
+
+    this.recentTrades.unshift(paperTrade);
+    if (this.recentTrades.length > 50) this.recentTrades.pop();
 
     opp.status = 'EXECUTED';
     opp.classification = 'REALISTIC_PAPER_EXECUTION';

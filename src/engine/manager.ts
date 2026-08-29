@@ -367,48 +367,11 @@ export class EngineManager {
     }
   }
 
-  public registerWsClient(ws: WebSocket) {
-    this.wsClients.add(ws);
+  public registerWsClient(_ws: any) {}
 
-    ws.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg && msg.type === 'PING') {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'PONG' }));
-          }
-        }
-      } catch (e) {
-        // Ignore non-JSON client messages
-      }
-    });
+  public broadcast(_msg: DashboardWsMessage) {}
 
-    ws.on('error', (err) => {
-      logger.log('WARN', 'WS', `Browser client WS error: ${err.message}`);
-    });
-
-    ws.on('close', () => {
-      this.wsClients.delete(ws);
-    });
-
-    ws.send(JSON.stringify({ type: 'STATUS', data: this.getMarketDataStatus() }));
-  }
-
-  public broadcast(msg: DashboardWsMessage) {
-    const payload = JSON.stringify(msg);
-    for (const client of this.wsClients) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
-    }
-  }
-
-  public broadcastStatus() {
-    this.broadcast({
-      type: 'STATUS',
-      data: this.getMarketDataStatus(),
-    });
-  }
+  public broadcastStatus() {}
 
   public getMarketDataStatus(): MarketDataStatusReport & {
     arbitrageEngineRunning: boolean;
