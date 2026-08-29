@@ -83,7 +83,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({ opportunities, onInspe
                   <td className="py-2.5 font-bold text-cyan-400">{opp.cycle?.id || (opp as any).cyclePath}</td>
                   <td className="py-2.5 text-gray-300">${opp.startingCapitalUsd}</td>
                   <td className="py-2.5 text-gray-300">${opp.theoreticalFinalUsd}</td>
-                  <td className="py-2.5 text-gray-200">+${opp.grossProfitUsd.toFixed(2)}</td>
+                  <td className="py-2.5 text-gray-200">+${(opp.theoreticalProfitUsd ?? (opp as any).grossProfitUsd ?? 0).toFixed(2)}</td>
                   <td className="py-2.5 text-rose-400">-${opp.totalFeesUsd.toFixed(2)}</td>
                   <td className="py-2.5 text-amber-400">-${opp.totalSlippageUsd.toFixed(2)}</td>
                   <td className={`py-2.5 font-bold ${(opp.realisticProfitUsd ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
