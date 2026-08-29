@@ -31,6 +31,15 @@ async function main() {
     engineManager.registerWsClient(ws);
   });
 
+  // Keep-alive heartbeat to prevent reverse proxies (Railway edge routers) from dropping idle sockets
+  setInterval(() => {
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.ping();
+      }
+    });
+  }, 20000);
+
   server.listen(port, hostname, async () => {
     console.log(`> Binance Research Laboratory running on http://${hostname}:${port}`);
     console.log(`> Server listening on host 0.0.0.0 port ${port} (process.env.PORT: ${process.env.PORT || '3000'})`);

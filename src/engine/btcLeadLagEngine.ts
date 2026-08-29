@@ -200,7 +200,7 @@ export class BtcLeadLagEngine {
   }
 
   private recordBtcShockEvent(btcShock: BtcShockFeatureSet) {
-    const eventId = `EVT-${btcShock.timestamp}`;
+    const eventId = `EVT-${btcShock.timestamp}-${Math.random().toString(36).substring(2, 7)}`;
     if (this.recentEvents.some((e) => e.eventId === eventId)) return;
 
     const eventRecord: BtcLeadLagEventRecord = {

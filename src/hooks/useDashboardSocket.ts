@@ -11,10 +11,20 @@ export function useDashboardSocket() {
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionCounterRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
+
+  // State refs to prevent stale closure state overwrites
+  const wsConnectedRef = useRef<boolean>(false);
+  wsConnectedRef.current = wsConnected;
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     // Initial REST fetch for instant rendering
     const fetchInitialData = async () => {
+      if (!isMountedRef.current) return;
       try {
         const [oppRes, tradeRes, statusRes, accountRes] = await Promise.all([
           fetch('/api/opportunities?limit=50'),
@@ -22,6 +32,8 @@ export function useDashboardSocket() {
           fetch('/api/market-data/status'),
           fetch('/api/btc-lead-lag/status'),
         ]);
+
+        if (!isMountedRef.current) return;
 
         if (oppRes.ok) {
           const json = await oppRes.json();
@@ -33,17 +45,20 @@ export function useDashboardSocket() {
         }
         if (statusRes.ok) {
           const s = await statusRes.json();
-          setStatus(s);
-          if (s && s.symbolUpdates) {
-            const list: PriceBookTicker[] = Object.entries(s.symbolUpdates).map(([symbol, val]: [string, any]) => ({
-              symbol,
-              bidPrice: val.bid,
-              bidQty: 10,
-              askPrice: val.ask,
-              askQty: 10,
-              updatedAt: Date.now(),
-            }));
-            setTickers(list);
+          // Only update status if WS is NOT actively connected to prevent overwriting live WS state
+          if (!wsConnectedRef.current) {
+            setStatus(s);
+            if (s && s.symbolUpdates) {
+              const list: PriceBookTicker[] = Object.entries(s.symbolUpdates).map(([symbol, val]: [string, any]) => ({
+                symbol,
+                bidPrice: val.bid,
+                bidQty: 10,
+                askPrice: val.ask,
+                askQty: 10,
+                updatedAt: Date.now(),
+              }));
+              setTickers(list);
+            }
           }
         }
         if (accountRes.ok) {
@@ -51,35 +66,67 @@ export function useDashboardSocket() {
           setAccount(data.account || data);
         }
       } catch (err) {
-        console.error('[WS_HOOK] Initial REST fetch error:', err);
+        console.error('[WS_HOOK] REST fetch error:', err);
       }
     };
 
     fetchInitialData();
 
-    // Fallback REST polling every 2 seconds if WebSocket is not yet connected
+    // Fallback REST polling ONLY when WebSocket is NOT connected
     const fallbackInterval = setInterval(() => {
-      fetchInitialData();
+      if (isMountedRef.current && !wsConnectedRef.current) {
+        fetchInitialData();
+      }
     }, 2000);
 
-    // Dynamic browser WebSocket connection (HTTPS -> wss://, HTTP -> ws://)
+    // Browser WebSocket connection with strict single-socket lifecycle
     function connectWebSocket() {
-      if (typeof window === 'undefined') return;
+      if (typeof window === 'undefined' || !isMountedRef.current) return;
 
+      // Cancel any pending reconnect timer
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+
+      // Safely close and detach handlers from any existing socket instance
+      if (socketRef.current) {
+        const oldSocket = socketRef.current;
+        socketRef.current = null;
+        oldSocket.onopen = null;
+        oldSocket.onmessage = null;
+        oldSocket.onerror = null;
+        oldSocket.onclose = null;
+        if (oldSocket.readyState === WebSocket.OPEN || oldSocket.readyState === WebSocket.CONNECTING) {
+          oldSocket.close(1000, 'Replacing stale socket connection');
+        }
+      }
+
+      const connId = ++connectionCounterRef.current;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}`;
 
       try {
-        console.log(`[WS_HOOK] Connecting to browser WebSocket broadcaster: ${wsUrl}`);
+        console.log(`[WS_HOOK] [Conn #${connId}] Connecting to browser WebSocket: ${wsUrl}`);
         const ws = new WebSocket(wsUrl);
         socketRef.current = ws;
 
         ws.onopen = () => {
-          console.log(`[WS_HOOK] Connected to browser WebSocket broadcaster: ${wsUrl}`);
+          if (!isMountedRef.current || socketRef.current !== ws) return;
+          console.log(`[WS_HOOK] [Conn #${connId}] Connected successfully: ${wsUrl}`);
           setWsConnected(true);
+
+          // Start client-side keep-alive ping every 15s to keep Railway reverse proxy socket alive
+          if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = setInterval(() => {
+            if (socketRef.current === ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'PING' }));
+            }
+          }, 15000);
         };
 
         ws.onmessage = (event) => {
+          if (!isMountedRef.current || socketRef.current !== ws) return;
           try {
             const msg = JSON.parse(event.data);
             if (!msg || !msg.type) return;
@@ -132,32 +179,80 @@ export function useDashboardSocket() {
                 break;
             }
           } catch (err) {
-            console.error('[WS_HOOK] Parse error:', err);
+            console.error(`[WS_HOOK] [Conn #${connId}] Message parse error:`, err);
           }
         };
 
         ws.onerror = (err) => {
-          console.warn('[WS_HOOK] Browser WebSocket error:', err);
+          if (!isMountedRef.current || socketRef.current !== ws) return;
+          console.warn(`[WS_HOOK] [Conn #${connId}] Browser WebSocket error:`, err);
         };
 
-        ws.onclose = () => {
-          console.warn('[WS_HOOK] Browser WebSocket closed. Reconnecting in 3s...');
+        ws.onclose = (event) => {
+          // GUARD: Ignore close events from stale/previous socket instances!
+          if (socketRef.current !== ws) {
+            console.log(`[WS_HOOK] [Conn #${connId}] Stale socket closed silently (code: ${event.code}). Active socket is unaffected.`);
+            return;
+          }
+
+          console.warn(
+            `[WS_HOOK] [Conn #${connId}] Browser WebSocket closed (code: ${event.code}, reason: "${event.reason || 'none'}", clean: ${event.wasClean}).`
+          );
           setWsConnected(false);
-          reconnectTimerRef.current = setTimeout(connectWebSocket, 3000);
+          socketRef.current = null;
+
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
+          }
+
+          // Schedule reconnection only if component remains mounted
+          if (isMountedRef.current && !reconnectTimerRef.current) {
+            console.log(`[WS_HOOK] Scheduling reconnect attempt in 3s...`);
+            reconnectTimerRef.current = setTimeout(() => {
+              reconnectTimerRef.current = null;
+              if (isMountedRef.current) {
+                connectWebSocket();
+              }
+            }, 3000);
+          }
         };
       } catch (err) {
-        console.error('[WS_HOOK] Failed to initialize WebSocket:', err);
-        reconnectTimerRef.current = setTimeout(connectWebSocket, 3000);
+        console.error(`[WS_HOOK] [Conn #${connId}] Failed to instantiate WebSocket:`, err);
+        if (isMountedRef.current && !reconnectTimerRef.current) {
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            if (isMountedRef.current) {
+              connectWebSocket();
+            }
+          }, 3000);
+        }
       }
     }
 
     connectWebSocket();
 
     return () => {
+      isMountedRef.current = false;
       clearInterval(fallbackInterval);
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
       if (socketRef.current) {
-        socketRef.current.close();
+        const s = socketRef.current;
+        socketRef.current = null;
+        s.onopen = null;
+        s.onmessage = null;
+        s.onerror = null;
+        s.onclose = null;
+        if (s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING) {
+          s.close(1000, 'Unmounting component');
+        }
       }
     };
   }, []);
